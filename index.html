@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spin to Win | Converge XPLAY</title>
+<!-- non-blocking font load: the game runs on system fonts until Montserrat arrives -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" media="print" onload="this.media='all'"
+      href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,700;0,800;0,900;1,900&display=swap">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Montserrat', 'Segoe UI', Arial, sans-serif;
+    background: #0d0524 url('assets/bg.png') center / cover no-repeat;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  #stage {
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 3vh 0 2.5vh;
+  }
+
+  /* ---------- TITLE ---------- */
+  .title {
+    color: #ffffff;
+    font-weight: 900;
+    font-size: clamp(34px, 8vh, 72px);
+    letter-spacing: 0.04em;
+    text-align: center;
+    text-shadow: 0 4px 30px rgba(124, 58, 237, 0.55);
+    z-index: 3;
+  }
+
+  /* ---------- MASCOT ---------- */
+  #mascot {
+    position: absolute;
+    left: 6vw;
+    top: 50%;
+    transform: translateY(-58%);
+    width: clamp(150px, 30vh, 300px);
+    z-index: 6;
+    pointer-events: none;
+  }
+  #mascot img {
+    width: 100%;
+    display: block;
+    animation: floaty 3.2s ease-in-out infinite alternate;
+    filter: drop-shadow(0 18px 30px rgba(0, 0, 0, 0.45));
+    transition: filter 0.5s ease;
+  }
+  @keyframes floaty {
+    from { transform: translateY(-10px) rotate(-2deg); }
+    to   { transform: translateY(12px)  rotate(2deg); }
+  }
+
+  /* Flight across the screen while the wheel spins */
+  #mascot.flying { animation: flyover 5.4s cubic-bezier(0.45, 0.05, 0.35, 1) forwards; }
+  #mascot.flying img {
+    filter: drop-shadow(0 18px 30px rgba(0,0,0,.45)) drop-shadow(0 0 22px rgba(45, 212, 191, 0.85));
+  }
+  @keyframes flyover {
+    0%    { transform: translateY(-58%) translateX(0)      rotate(0deg)   scale(1);    opacity: 1; }
+    12%   { transform: translateY(-70%) translateX(6vw)    rotate(14deg)  scale(1.05); opacity: 1; }
+    46%   { transform: translateY(-140%) translateX(78vw)  rotate(22deg)  scale(0.92); opacity: 1; }
+    54%   { transform: translateY(-150%) translateX(115vw) rotate(24deg)  scale(0.88); opacity: 0; }
+    54.1% { transform: translateY(30%)  translateX(-40vw)  rotate(-14deg) scale(0.9);  opacity: 0; }
+    62%   { transform: translateY(22%)  translateX(-18vw)  rotate(-10deg) scale(0.94); opacity: 1; }
+    100%  { transform: translateY(-58%) translateX(0)      rotate(0deg)   scale(1);    opacity: 1; }
+  }
+
+  /* ---------- WHEEL ---------- */
+  #wheelWrap {
+    position: relative;
+    width: min(58vh, 84vw);
+    height: min(58vh, 84vw);
+    z-index: 2;
+    filter: drop-shadow(0 0 60px rgba(124, 58, 237, 0.45));
+  }
+  #wheel {
+    width: 100%;
+    height: 100%;
+    display: block;
+    transform: rotate(0deg);
+    will-change: transform;
+  }
+  #pointer {
+    position: absolute;
+    top: -2.2%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: min(2.4vh, 18px) solid transparent;
+    border-right: min(2.4vh, 18px) solid transparent;
+    border-top: min(4.2vh, 32px) solid #5eead4;
+    filter: drop-shadow(0 3px 6px rgba(0,0,0,.5));
+    z-index: 4;
+  }
+  #pointer.tick { animation: ptick 0.09s ease-out; }
+  @keyframes ptick {
+    50% { transform: translateX(-50%) rotate(9deg); }
+  }
+
+  /* ---------- SPIN BUTTON ---------- */
+  #spinBtn {
+    font-family: inherit;
+    font-weight: 800;
+    font-size: clamp(16px, 2.6vh, 24px);
+    letter-spacing: 0.35em;
+    text-indent: 0.35em;
+    color: #101142;
+    background: linear-gradient(180deg, #8df2e3 0%, #5eead4 55%, #3fd6be 100%);
+    border: none;
+    border-radius: 999px;
+    padding: 1.6vh 9vw;
+    cursor: pointer;
+    z-index: 3;
+    box-shadow: 0 6px 26px rgba(94, 234, 212, 0.35), inset 0 -3px 0 rgba(0,0,0,.15);
+    transition: transform .15s ease, box-shadow .15s ease, opacity .2s ease;
+  }
+  #spinBtn:hover:not(:disabled) { transform: scale(1.05); box-shadow: 0 8px 34px rgba(94, 234, 212, 0.55), inset 0 -3px 0 rgba(0,0,0,.15); }
+  #spinBtn:active:not(:disabled) { transform: scale(0.97); }
+  #spinBtn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  /* ---------- FOOTER LOGOS ---------- */
+  #logos {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(24px, 5vw, 70px);
+    z-index: 3;
+  }
+  #logos img { height: clamp(28px, 5.5vh, 52px); width: auto; display: block; }
+
+  /* ---------- MODAL ---------- */
+  #overlay, #editOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(8, 3, 25, 0.72);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s ease;
+  }
+  #overlay.show, #editOverlay.show { opacity: 1; pointer-events: auto; }
+
+  #modal {
+    background: linear-gradient(160deg, #2b1160 0%, #1a0940 60%, #240d52 100%);
+    border: 1px solid rgba(94, 234, 212, 0.45);
+    border-radius: 28px;
+    box-shadow: 0 0 80px rgba(124, 58, 237, 0.55), inset 0 1px 0 rgba(255,255,255,.08);
+    padding: clamp(28px, 6vh, 52px) clamp(30px, 6vw, 70px);
+    text-align: center;
+    max-width: min(88vw, 620px);
+    transform: scale(0.7);
+    transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  #overlay.show #modal { transform: scale(1); }
+
+  #modal .congrats {
+    color: #5eead4;
+    font-weight: 800;
+    font-size: clamp(13px, 2vh, 18px);
+    letter-spacing: 0.45em;
+    text-indent: 0.45em;
+    margin-bottom: 1.4vh;
+  }
+  #modal .prize {
+    color: #ffffff;
+    font-weight: 900;
+    font-size: clamp(30px, 6.4vh, 58px);
+    line-height: 1.12;
+    text-shadow: 0 4px 26px rgba(124, 58, 237, 0.8);
+    margin-bottom: 1.2vh;
+  }
+  #modal .sub {
+    color: rgba(255, 255, 255, 0.65);
+    font-weight: 700;
+    font-size: clamp(12px, 1.9vh, 16px);
+    margin-bottom: 3.4vh;
+  }
+  #pickAgainBtn {
+    font-family: inherit;
+    font-weight: 800;
+    font-size: clamp(14px, 2.2vh, 20px);
+    letter-spacing: 0.28em;
+    text-indent: 0.28em;
+    color: #101142;
+    background: linear-gradient(180deg, #8df2e3 0%, #5eead4 55%, #3fd6be 100%);
+    border: none;
+    border-radius: 999px;
+    padding: 1.5vh 3.4em;
+    cursor: pointer;
+    box-shadow: 0 6px 26px rgba(94, 234, 212, 0.35);
+    transition: transform .15s ease;
+  }
+  #pickAgainBtn:hover { transform: scale(1.05); }
+  #closeBtn {
+    display: block;
+    margin: 2vh auto 0;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.45);
+    font-family: inherit;
+    font-weight: 700;
+    font-size: clamp(11px, 1.7vh, 14px);
+    letter-spacing: 0.2em;
+    cursor: pointer;
+    transition: color .15s ease;
+  }
+  #closeBtn:hover { color: rgba(255, 255, 255, 0.85); }
+
+  /* ---------- EDIT PANEL ---------- */
+  #editBtn {
+    position: absolute;
+    top: 2.5vh;
+    right: 2.5vw;
+    z-index: 5;
+    font-family: inherit;
+    font-weight: 800;
+    font-size: clamp(11px, 1.7vh, 14px);
+    letter-spacing: 0.2em;
+    text-indent: 0.2em;
+    color: #5eead4;
+    background: rgba(94, 234, 212, 0.08);
+    border: 1px solid rgba(94, 234, 212, 0.5);
+    border-radius: 999px;
+    padding: 1vh 1.6em;
+    cursor: pointer;
+    transition: background .15s ease, transform .15s ease;
+  }
+  #editBtn:hover { background: rgba(94, 234, 212, 0.2); transform: scale(1.05); }
+
+  #editModal {
+    background: linear-gradient(160deg, #2b1160 0%, #1a0940 60%, #240d52 100%);
+    border: 1px solid rgba(94, 234, 212, 0.45);
+    border-radius: 28px;
+    box-shadow: 0 0 80px rgba(124, 58, 237, 0.55), inset 0 1px 0 rgba(255,255,255,.08);
+    padding: clamp(24px, 4.5vh, 40px) clamp(24px, 4.5vw, 48px);
+    width: min(90vw, 460px);
+    transform: scale(0.7);
+    transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  #editOverlay.show #editModal { transform: scale(1); }
+
+  #editModal .editTitle {
+    color: #5eead4;
+    font-weight: 800;
+    font-size: clamp(13px, 2vh, 18px);
+    letter-spacing: 0.35em;
+    text-indent: 0.35em;
+    text-align: center;
+    margin-bottom: 0.8vh;
+  }
+  #editModal .editHint {
+    color: rgba(255, 255, 255, 0.55);
+    font-weight: 700;
+    font-size: clamp(11px, 1.7vh, 14px);
+    text-align: center;
+    margin-bottom: 2vh;
+  }
+  #entriesInput {
+    display: block;
+    width: 100%;
+    height: min(40vh, 320px);
+    resize: none;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: clamp(13px, 2vh, 16px);
+    line-height: 1.7;
+    color: #ffffff;
+    background: rgba(8, 3, 25, 0.55);
+    border: 1px solid rgba(124, 58, 237, 0.55);
+    border-radius: 14px;
+    padding: 14px 18px;
+    outline: none;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+  #entriesInput:focus { border-color: #5eead4; }
+  #editError {
+    color: #f0abfc;
+    font-weight: 700;
+    font-size: clamp(11px, 1.7vh, 14px);
+    text-align: center;
+    min-height: 2.2vh;
+    margin-top: 1vh;
+  }
+  #editModal .editActions {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 1.4vh;
+  }
+  #saveEntriesBtn {
+    font-family: inherit;
+    font-weight: 800;
+    font-size: clamp(13px, 2vh, 17px);
+    letter-spacing: 0.24em;
+    text-indent: 0.24em;
+    color: #101142;
+    background: linear-gradient(180deg, #8df2e3 0%, #5eead4 55%, #3fd6be 100%);
+    border: none;
+    border-radius: 999px;
+    padding: 1.3vh 2.6em;
+    cursor: pointer;
+    box-shadow: 0 6px 26px rgba(94, 234, 212, 0.35);
+    transition: transform .15s ease;
+  }
+  #saveEntriesBtn:hover { transform: scale(1.05); }
+  #cancelEditBtn {
+    font-family: inherit;
+    font-weight: 700;
+    font-size: clamp(12px, 1.8vh, 15px);
+    letter-spacing: 0.2em;
+    color: rgba(255, 255, 255, 0.45);
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: color .15s ease;
+  }
+  #cancelEditBtn:hover { color: rgba(255, 255, 255, 0.85); }
+
+  /* ---------- CONFETTI ---------- */
+  #confetti {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 30;
+  }
+
+  /* Small screens: tuck the mascot lower-left so it never covers the wheel */
+  @media (max-width: 760px) {
+    #mascot { width: clamp(90px, 18vh, 150px); left: 2vw; top: auto; bottom: 16vh; transform: none; }
+    @keyframes flyover {
+      0%    { transform: translateX(0)      rotate(0deg); opacity: 1; }
+      46%   { transform: translate(80vw, -46vh) rotate(22deg); opacity: 1; }
+      54%   { transform: translate(120vw, -52vh) rotate(24deg); opacity: 0; }
+      54.1% { transform: translate(-50vw, 10vh) rotate(-14deg); opacity: 0; }
+      62%   { transform: translate(-24vw, 6vh) rotate(-10deg); opacity: 1; }
+      100%  { transform: translateX(0) rotate(0deg); opacity: 1; }
+    }
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <h1 class="title">SPIN TO WIN</h1>
+
+  <button id="editBtn" title="Edit wheel entries">EDIT WHEEL</button>
+
+  <div id="mascot">
+    <img src="assets/Layer%203%20copy%203.png" alt="XPLAY mascot">
+  </div>
+
+  <div id="wheelWrap">
+    <canvas id="wheel" width="1000" height="1000"></canvas>
+    <div id="pointer"></div>
+  </div>
+
+  <button id="spinBtn">SPIN</button>
+
+  <div id="logos">
+    <img src="assets/GameChangerLogo-04.png" alt="Converge GameChanger">
+    <img src="assets/SuperFiberX_SFX_V%20logo%2003.png" alt="Converge SuperFiber X">
+    <img src="assets/XPLAY%20LOGO%20w%20BG.png" alt="XPLAY">
+  </div>
+</div>
+
+<div id="overlay">
+  <div id="modal">
+    <div class="congrats">CONGRATULATIONS!</div>
+    <div class="prize" id="prizeName">PRIZE</div>
+    <div class="sub">You just won this prize. Enjoy!</div>
+    <button id="pickAgainBtn">PICK AGAIN</button>
+    <button id="closeBtn">CLOSE</button>
+  </div>
+</div>
+
+<div id="editOverlay" class="overlayBase">
+  <div id="editModal">
+    <div class="editTitle">EDIT WHEEL</div>
+    <div class="editHint">One entry per line (2–20 entries)</div>
+    <textarea id="entriesInput" spellcheck="false"></textarea>
+    <div id="editError"></div>
+    <div class="editActions">
+      <button id="saveEntriesBtn">SAVE</button>
+      <button id="cancelEditBtn">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<canvas id="confetti"></canvas>
+
+<script>
+/* =========================================================
+   DEFAULT PRIZES — one entry per wheel slice.
+   Editable in-page via the EDIT WHEEL button; edits are
+   saved to localStorage and override this list.
+   ========================================================= */
+const DEFAULT_PRIZES = [
+  '₱1,000 GCASH',
+  'GAMING HEADSET',
+  'XPLAY PREMIUM',
+  'CONVERGE MERCH',
+  'MYSTERY BOX',
+  'GAMING MOUSE',
+  'POWERBANK',
+  'TUMBLER',
+];
+const STORAGE_KEY = 'converge-raffle-entries';
+
+function loadPrizes() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (Array.isArray(saved) && saved.length >= 2 && saved.every(s => typeof s === 'string')) {
+      return saved;
+    }
+  } catch (e) {}
+  return DEFAULT_PRIZES.slice();
+}
+
+let PRIZES = loadPrizes();
+
+const SPIN_DURATION = 5200;         // ms — keep in sync with #mascot.flying animation
+const FULL_TURNS = 6;               // extra full rotations per spin
+
+/* ---------- wheel drawing ---------- */
+const wheel = document.getElementById('wheel');
+const ctx = wheel.getContext('2d');
+const SIZE = 1000, C = SIZE / 2;
+let SEGMENTS = PRIZES.length;
+let SEG_ANGLE = 360 / SEGMENTS;
+const COLORS = ['#7C3AED', '#45108A', '#9333EA', '#320B69'];
+
+function segColor(i) {
+  let c = COLORS[i % COLORS.length];
+  // avoid identical colors on the last/first adjacent slices
+  if (i === SEGMENTS - 1 && c === COLORS[0]) c = '#5B21B6';
+  return c;
+}
+
+function wrapLabel(text, maxChars) {
+  const words = String(text).split(' ');
+  const lines = [''];
+  for (const w of words) {
+    const cur = lines[lines.length - 1];
+    if (cur && (cur + ' ' + w).length > maxChars && lines.length < 2) lines.push(w);
+    else lines[lines.length - 1] = cur ? cur + ' ' + w : w;
+  }
+  return lines;
+}
+
+function drawWheel(restAngle = 0) {
+  // restAngle: the wheel's current CSS rotation — used so labels
+  // are flipped to read upright at whatever angle the wheel rests.
+  const rad = d => (d * Math.PI) / 180;
+  ctx.clearRect(0, 0, SIZE, SIZE);
+
+  // outer rim
+  const rimGrad = ctx.createLinearGradient(0, 0, 0, SIZE);
+  rimGrad.addColorStop(0, '#3b1d78');
+  rimGrad.addColorStop(1, '#1e0a45');
+  ctx.beginPath();
+  ctx.arc(C, C, 495, 0, Math.PI * 2);
+  ctx.fillStyle = rimGrad;
+  ctx.fill();
+
+  // rim lights
+  for (let i = 0; i < 24; i++) {
+    const a = rad(i * 15 - 90);
+    const x = C + Math.cos(a) * 468, y = C + Math.sin(a) * 468;
+    ctx.beginPath();
+    ctx.arc(x, y, 9, 0, Math.PI * 2);
+    ctx.fillStyle = i % 2 ? '#5eead4' : '#c4b5fd';
+    ctx.shadowColor = i % 2 ? '#5eead4' : '#c4b5fd';
+    ctx.shadowBlur = 14;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  // slices (slice 0 starts at 12 o'clock, clockwise)
+  const R = 440;
+  for (let i = 0; i < SEGMENTS; i++) {
+    const start = rad(i * SEG_ANGLE - 90);
+    const end = rad((i + 1) * SEG_ANGLE - 90);
+    ctx.beginPath();
+    ctx.moveTo(C, C);
+    ctx.arc(C, C, R, start, end);
+    ctx.closePath();
+    const g = ctx.createRadialGradient(C, C, 60, C, C, R);
+    const base = segColor(i);
+    g.addColorStop(0, shade(base, 24));
+    g.addColorStop(1, base);
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
+
+  // labels (flip the left-half slices so text never reads upside down)
+  ctx.fillStyle = '#ffffff';
+  ctx.textBaseline = 'middle';
+  for (let i = 0; i < SEGMENTS; i++) {
+    const centerDeg = i * SEG_ANGLE + SEG_ANGLE / 2 - 90;
+    const norm = (((centerDeg + restAngle) % 360) + 360) % 360;
+    const flip = norm > 90 && norm < 270;
+    ctx.save();
+    ctx.translate(C, C);
+    ctx.rotate(rad(centerDeg));
+    if (flip) ctx.rotate(Math.PI);
+    ctx.textAlign = flip ? 'left' : 'right';
+    const lines = wrapLabel(PRIZES[i], 10);
+    let fs = SEGMENTS > 10 ? 26 : 32;
+    ctx.font = `800 ${fs}px Montserrat, Arial, sans-serif`;
+    // shrink to fit between hub and rim so long names never overflow
+    const maxW = R - 34 - 130;
+    const widest = Math.max(...lines.map(l => ctx.measureText(l).width));
+    if (widest > maxW) {
+      fs = Math.max(15, Math.floor(fs * maxW / widest));
+      ctx.font = `800 ${fs}px Montserrat, Arial, sans-serif`;
+    }
+    ctx.shadowColor = 'rgba(0,0,0,0.4)';
+    ctx.shadowBlur = 6;
+    lines.forEach((line, li) => {
+      const off = (li - (lines.length - 1) / 2) * (fs + 6);
+      ctx.fillText(line, flip ? -(R - 34) : R - 34, off);
+    });
+    ctx.restore();
+  }
+
+  // hub: glossy teal ball
+  ctx.beginPath();
+  ctx.arc(C, C, 64, 0, Math.PI * 2);
+  const hubGrad = ctx.createRadialGradient(C - 18, C - 24, 6, C, C, 66);
+  hubGrad.addColorStop(0, '#eafffb');
+  hubGrad.addColorStop(0.35, '#7df0dd');
+  hubGrad.addColorStop(0.75, '#2dd4bf');
+  hubGrad.addColorStop(1, '#0c8f7f');
+  ctx.fillStyle = hubGrad;
+  ctx.shadowColor = 'rgba(94, 234, 212, 0.9)';
+  ctx.shadowBlur = 42;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.stroke();
+}
+
+function shade(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, (n >> 16) + amt);
+  const g = Math.min(255, ((n >> 8) & 0xff) + amt);
+  const b = Math.min(255, (n & 0xff) + amt);
+  return `rgb(${r},${g},${b})`;
+}
+
+drawWheel();
+
+// canvas text is rasterized before the webfont arrives — redraw once it has.
+// The font stylesheet loads async, so retry when it lands.
+function refreshWheelFont() {
+  try {
+    if (!document.fonts) return;
+    Promise.all([
+      document.fonts.load('800 32px Montserrat'),
+    ]).then(loaded => {
+      if (loaded.some(a => a.length)) drawWheel(currentRotation % 360);
+    }).catch(() => {});
+  } catch (e) {}
+}
+refreshWheelFont();
+const fontLink = document.querySelector('link[href*="fonts.googleapis"]');
+if (fontLink) fontLink.addEventListener('load', refreshWheelFont);
+
+/* ---------- spin logic ---------- */
+const spinBtn = document.getElementById('spinBtn');
+const mascot = document.getElementById('mascot');
+const pointer = document.getElementById('pointer');
+const overlay = document.getElementById('overlay');
+const prizeName = document.getElementById('prizeName');
+const pickAgainBtn = document.getElementById('pickAgainBtn');
+const closeBtn = document.getElementById('closeBtn');
+
+let currentRotation = 0;
+let spinning = false;
+
+function spin() {
+  if (spinning || overlay.classList.contains('show') ||
+      document.getElementById('editOverlay').classList.contains('show')) return;
+  spinning = true;
+  spinBtn.disabled = true;
+  spinBtn.blur();
+
+  initAudio();
+
+  // choose the winner first, then rotate so its slice lands on the pointer
+  const winner = Math.floor(Math.random() * SEGMENTS);
+  const sliceCenter = winner * SEG_ANGLE + SEG_ANGLE / 2;        // clockwise from 12 o'clock
+  const jitter = (Math.random() - 0.5) * SEG_ANGLE * 0.6;        // land off-center for realism
+  const targetMod = (360 - sliceCenter + jitter + 360) % 360;    // required rotation (mod 360)
+  const needed = (targetMod - (currentRotation % 360) + 360) % 360;
+  currentRotation += FULL_TURNS * 360 + needed;
+
+  wheel.style.transition = `transform ${SPIN_DURATION}ms cubic-bezier(0.12, 0.62, 0.09, 1)`;
+  wheel.style.transform = `rotate(${currentRotation}deg)`;
+
+  // mascot flyover
+  mascot.classList.remove('flying');
+  void mascot.offsetWidth; // restart animation
+  mascot.classList.add('flying');
+
+  startTicker();
+
+  // once the wheel settles, re-render labels upright for the new rest angle
+  setTimeout(() => drawWheel(currentRotation % 360), SPIN_DURATION + 60);
+
+  setTimeout(() => {
+    stopTicker();
+    spinning = false;
+    spinBtn.disabled = false;
+    prizeName.textContent = PRIZES[winner];
+    playWinChime();
+    overlay.classList.add('show');
+    pickAgainBtn.focus();
+    launchConfetti();
+  }, SPIN_DURATION + 450);
+}
+
+mascot.addEventListener('animationend', () => mascot.classList.remove('flying'));
+
+spinBtn.addEventListener('click', spin);
+pickAgainBtn.addEventListener('click', () => {
+  overlay.classList.remove('show');
+  setTimeout(spin, 420);
+});
+closeBtn.addEventListener('click', () => overlay.classList.remove('show'));
+
+/* ---------- edit wheel entries ---------- */
+const editBtn = document.getElementById('editBtn');
+const editOverlay = document.getElementById('editOverlay');
+const entriesInput = document.getElementById('entriesInput');
+const editError = document.getElementById('editError');
+const saveEntriesBtn = document.getElementById('saveEntriesBtn');
+const cancelEditBtn = document.getElementById('cancelEditBtn');
+
+const MAX_ENTRIES = 20;
+
+function openEditor() {
+  if (spinning) return;
+  entriesInput.value = PRIZES.join('\n');
+  editError.textContent = '';
+  editOverlay.classList.add('show');
+  entriesInput.focus();
+}
+
+function closeEditor() {
+  editOverlay.classList.remove('show');
+}
+
+function saveEntries() {
+  const entries = entriesInput.value
+    .split('\n')
+    .map(s => s.trim())
+    .filter(Boolean);
+  if (entries.length < 2) {
+    editError.textContent = 'Please enter at least 2 entries.';
+    return;
+  }
+  if (entries.length > MAX_ENTRIES) {
+    editError.textContent = `Maximum ${MAX_ENTRIES} entries (you have ${entries.length}).`;
+    return;
+  }
+  PRIZES = entries;
+  SEGMENTS = PRIZES.length;
+  SEG_ANGLE = 360 / SEGMENTS;
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(PRIZES)); } catch (e) {}
+
+  // reset the wheel to its starting angle for the new slice layout
+  currentRotation = 0;
+  wheel.style.transition = 'none';
+  wheel.style.transform = 'rotate(0deg)';
+  drawWheel(0);
+  closeEditor();
+}
+
+editBtn.addEventListener('click', openEditor);
+saveEntriesBtn.addEventListener('click', saveEntries);
+cancelEditBtn.addEventListener('click', closeEditor);
+editOverlay.addEventListener('click', (e) => {
+  if (e.target === editOverlay) closeEditor();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && editOverlay.classList.contains('show')) closeEditor();
+});
+
+/* ---------- tick sound + pointer wiggle while spinning ---------- */
+let audioCtx = null;
+function initAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+  }
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+function blip(freq, dur, gainVal, when) {
+  if (!audioCtx) return;
+  try {
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'triangle';
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(gainVal, when);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(when);
+    o.stop(when + dur);
+  } catch (e) {}
+}
+function playWinChime() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  blip(523, 0.25, 0.12, t);
+  blip(659, 0.25, 0.12, t + 0.12);
+  blip(784, 0.4, 0.14, t + 0.24);
+}
+
+let tickerRaf = null;
+function wheelAngle() {
+  const t = getComputedStyle(wheel).transform;
+  if (!t || t === 'none') return 0;
+  const m = t.match(/matrix\(([-\d.e]+),\s*([-\d.e]+)/);
+  if (!m) return 0;
+  const a = Math.atan2(parseFloat(m[2]), parseFloat(m[1])) * 180 / Math.PI;
+  return (a + 360) % 360;
+}
+function startTicker() {
+  let last = wheelAngle();
+  let total = last;                              // unwrapped absolute angle
+  let lastTickCount = Math.floor(total / SEG_ANGLE);
+  const step = () => {
+    const a = wheelAngle();
+    total += (a - last + 360) % 360;
+    last = a;
+    // slice boundaries sit at multiples of SEG_ANGLE, so ticks align
+    // with edges actually passing under the pointer
+    const count = Math.floor(total / SEG_ANGLE);
+    if (count > lastTickCount) {
+      lastTickCount = count;
+      if (audioCtx) blip(1100, 0.035, 0.06, audioCtx.currentTime);
+      pointer.classList.remove('tick');
+      void pointer.offsetWidth;
+      pointer.classList.add('tick');
+    }
+    tickerRaf = requestAnimationFrame(step);
+  };
+  tickerRaf = requestAnimationFrame(step);
+}
+function stopTicker() {
+  if (tickerRaf) cancelAnimationFrame(tickerRaf);
+  tickerRaf = null;
+}
+
+/* ---------- confetti ---------- */
+const confettiCanvas = document.getElementById('confetti');
+const cctx = confettiCanvas.getContext('2d');
+let confettiRaf = null;
+
+function launchConfetti() {
+  confettiCanvas.width = window.innerWidth;
+  confettiCanvas.height = window.innerHeight;
+  const colors = ['#5eead4', '#8b5cf6', '#c4b5fd', '#f0abfc', '#ffffff', '#facc15'];
+  const parts = [];
+  for (let i = 0; i < 160; i++) {
+    parts.push({
+      x: confettiCanvas.width / 2 + (Math.random() - 0.5) * confettiCanvas.width * 0.5,
+      y: -20 - Math.random() * confettiCanvas.height * 0.3,
+      w: 6 + Math.random() * 8,
+      h: 8 + Math.random() * 10,
+      vx: (Math.random() - 0.5) * 3,
+      vy: 2.5 + Math.random() * 3.5,
+      rot: Math.random() * Math.PI * 2,
+      vr: (Math.random() - 0.5) * 0.25,
+      color: colors[Math.floor(Math.random() * colors.length)],
+    });
+  }
+  const started = performance.now();
+  if (confettiRaf) cancelAnimationFrame(confettiRaf);
+  const step = (now) => {
+    cctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+    let alive = false;
+    for (const p of parts) {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.05;
+      p.rot += p.vr;
+      if (p.y < confettiCanvas.height + 30) alive = true;
+      cctx.save();
+      cctx.translate(p.x, p.y);
+      cctx.rotate(p.rot);
+      cctx.fillStyle = p.color;
+      cctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      cctx.restore();
+    }
+    if (alive && now - started < 6000) confettiRaf = requestAnimationFrame(step);
+    else {
+      cctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+      confettiRaf = null;
+    }
+  };
+  confettiRaf = requestAnimationFrame(step);
+}
+</script>
+</body>
+</html>
