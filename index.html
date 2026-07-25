@@ -398,7 +398,7 @@
 <div id="editOverlay" class="overlayBase">
   <div id="editModal">
     <div class="editTitle">EDIT WHEEL</div>
-    <div class="editHint">One entry per line (2–20 entries)</div>
+    <div class="editHint">One entry per line (minimum 2 entries)</div>
     <textarea id="entriesInput" spellcheck="false"></textarea>
     <div id="editError"></div>
     <div class="editActions">
@@ -663,8 +663,6 @@ const editError = document.getElementById('editError');
 const saveEntriesBtn = document.getElementById('saveEntriesBtn');
 const cancelEditBtn = document.getElementById('cancelEditBtn');
 
-const MAX_ENTRIES = 20;
-
 function openEditor() {
   if (spinning) return;
   entriesInput.value = PRIZES.join('\n');
@@ -684,10 +682,6 @@ function saveEntries() {
     .filter(Boolean);
   if (entries.length < 2) {
     editError.textContent = 'Please enter at least 2 entries.';
-    return;
-  }
-  if (entries.length > MAX_ENTRIES) {
-    editError.textContent = `Maximum ${MAX_ENTRIES} entries (you have ${entries.length}).`;
     return;
   }
   PRIZES = entries;
