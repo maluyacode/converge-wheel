@@ -430,7 +430,7 @@
 <div id="editOverlay" class="overlayBase">
   <div id="editModal">
     <div class="editTitle">EDIT WHEEL</div>
-    <div class="editHint">One entry per line (2–20 entries)</div>
+    <div class="editHint">One entry per line (minimum 2 entries)</div>
     <textarea id="entriesInput" spellcheck="false"></textarea>
     <div class="editField">
       <label for="spinSecondsInput">Spin length (seconds)</label>
@@ -511,6 +511,7 @@ function fullTurns() {
 const wheel = document.getElementById('wheel');
 const ctx = wheel.getContext('2d');
 const SIZE = 1000, C = SIZE / 2;
+const R = 440;                      // slice radius
 let SEGMENTS = PRIZES.length;
 let SEG_ANGLE = 360 / SEGMENTS;
 const COLORS = ['#7C3AED', '#45108A', '#9333EA', '#320B69'];
@@ -522,15 +523,60 @@ function segColor(i) {
   return c;
 }
 
-function wrapLabel(text, maxChars) {
-  const words = String(text).split(' ');
-  const lines = [''];
-  for (const w of words) {
-    const cur = lines[lines.length - 1];
-    if (cur && (cur + ' ' + w).length > maxChars && lines.length < 2) lines.push(w);
-    else lines[lines.length - 1] = cur ? cur + ' ' + w : w;
+/* ---------- label fitting ----------
+   Labels run along the radius, so a slice gives them two budgets:
+   the radial run from the hub to the rim (width), and the wedge
+   thickness (height) — which shrinks both as slices get thinner and
+   as the text reaches further inward. Both are solved per label so
+   any entry count stays legible. */
+const LABEL_R = R - 34;     // outer end of the text
+const HUB_CLEAR = 130;      // keep text off the hub
+const REF_FS = 100;         // measure once at this size; width scales linearly
+const LINE_H = 1.18;        // line height as a multiple of the font size
+const FIT = 0.82;           // leave a margin inside the wedge
+const MAX_FS = 32, MIN_FS = 9;
+
+// Split into two balanced lines; null when the text is a single word.
+function splitTwo(text) {
+  const words = String(text).trim().split(/\s+/);
+  if (words.length < 2) return null;
+  let best = null;
+  for (let k = 1; k < words.length; k++) {
+    const a = words.slice(0, k).join(' ');
+    const b = words.slice(k).join(' ');
+    const score = Math.max(a.length, b.length);
+    if (!best || score < best.score) best = { lines: [a, b], score };
   }
-  return lines;
+  return best.lines;
+}
+
+function widthAtRef(lines) {
+  ctx.font = `800 ${REF_FS}px Montserrat, Arial, sans-serif`;
+  return Math.max(1, ...lines.map(l => ctx.measureText(l).width));
+}
+
+function fitLabel(text) {
+  // usable wedge thickness at radius r is 2*r*sin(halfAngle), minus margin
+  const s = 2 * Math.sin((SEG_ANGLE * Math.PI) / 360) * FIT;
+  const maxW = LABEL_R - HUB_CLEAR;
+
+  const options = [[String(text)]];
+  const two = splitTwo(text);
+  if (two) options.push(two);
+
+  let best = null;
+  for (const lines of options) {
+    const w = widthAtRef(lines);
+    const k = LINE_H * lines.length - (LINE_H - 1);   // block height / font size
+    // Height fit: block must clear the wedge at the text's innermost point,
+    // which itself depends on the size — solved directly rather than iterated.
+    let fs = (s * LABEL_R) / (k + (s * w) / REF_FS);
+    // Width fit: never run past the hub.
+    fs = Math.min(fs, (REF_FS * maxW) / w, MAX_FS);
+    // Wrapping only wins if it buys a meaningfully bigger font.
+    if (!best || fs > best.fs + 0.5) best = { lines, fs };
+  }
+  return { lines: best.lines, fs: Math.max(MIN_FS, Math.floor(best.fs)) };
 }
 
 function drawWheel(restAngle = 0) {
@@ -562,7 +608,6 @@ function drawWheel(restAngle = 0) {
   }
 
   // slices (slice 0 starts at 12 o'clock, clockwise)
-  const R = 440;
   for (let i = 0; i < SEGMENTS; i++) {
     const start = rad(i * SEG_ANGLE - 90);
     const end = rad((i + 1) * SEG_ANGLE - 90);
@@ -593,21 +638,13 @@ function drawWheel(restAngle = 0) {
     ctx.rotate(rad(centerDeg));
     if (flip) ctx.rotate(Math.PI);
     ctx.textAlign = flip ? 'left' : 'right';
-    const lines = wrapLabel(PRIZES[i], 10);
-    let fs = SEGMENTS > 10 ? 26 : 32;
+    const { lines, fs } = fitLabel(PRIZES[i]);
     ctx.font = `800 ${fs}px Montserrat, Arial, sans-serif`;
-    // shrink to fit between hub and rim so long names never overflow
-    const maxW = R - 34 - 130;
-    const widest = Math.max(...lines.map(l => ctx.measureText(l).width));
-    if (widest > maxW) {
-      fs = Math.max(15, Math.floor(fs * maxW / widest));
-      ctx.font = `800 ${fs}px Montserrat, Arial, sans-serif`;
-    }
     ctx.shadowColor = 'rgba(0,0,0,0.4)';
     ctx.shadowBlur = 6;
     lines.forEach((line, li) => {
-      const off = (li - (lines.length - 1) / 2) * (fs + 6);
-      ctx.fillText(line, flip ? -(R - 34) : R - 34, off);
+      const off = (li - (lines.length - 1) / 2) * (fs * LINE_H);
+      ctx.fillText(line, flip ? -LABEL_R : LABEL_R, off);
     });
     ctx.restore();
   }
@@ -728,8 +765,6 @@ const saveEntriesBtn = document.getElementById('saveEntriesBtn');
 const cancelEditBtn = document.getElementById('cancelEditBtn');
 const spinSecondsInput = document.getElementById('spinSecondsInput');
 
-const MAX_ENTRIES = 20;
-
 function openEditor() {
   if (spinning) return;
   entriesInput.value = PRIZES.join('\n');
@@ -750,10 +785,6 @@ function saveEntries() {
     .filter(Boolean);
   if (entries.length < 2) {
     editError.textContent = 'Please enter at least 2 entries.';
-    return;
-  }
-  if (entries.length > MAX_ENTRIES) {
-    editError.textContent = `Maximum ${MAX_ENTRIES} entries (you have ${entries.length}).`;
     return;
   }
   const sec = parseFloat(spinSecondsInput.value);
