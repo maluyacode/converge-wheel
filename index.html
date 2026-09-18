@@ -189,6 +189,13 @@
     text-shadow: 0 4px 26px rgba(124, 58, 237, 0.8);
     margin-bottom: 1.2vh;
   }
+  #modal .removedNote {
+    color: #5eead4;
+    font-weight: 700;
+    font-size: clamp(11px, 1.7vh, 14px);
+    margin: -2vh 0 2.6vh;
+  }
+  #modal .removedNote:empty { display: none; }
   #modal .sub {
     color: rgba(255, 255, 255, 0.65);
     font-weight: 700;
@@ -324,6 +331,14 @@
     -webkit-user-select: text;
   }
   #spinSecondsInput:focus { border-color: #5eead4; }
+  .editField.check { justify-content: flex-start; cursor: pointer; }
+  .editField.check label { cursor: pointer; }
+  #removeWinnerInput {
+    width: 20px; height: 20px;
+    accent-color: #5eead4;
+    cursor: pointer;
+    flex: none;
+  }
 
   #editError {
     color: #f0abfc;
@@ -422,6 +437,7 @@
     <div class="congrats">CONGRATULATIONS!</div>
     <div class="prize" id="prizeName">PRIZE</div>
     <div class="sub">You just won this prize. Enjoy!</div>
+    <div class="removedNote" id="removedNote"></div>
     <button id="pickAgainBtn">PICK AGAIN</button>
     <button id="closeBtn">CLOSE</button>
   </div>
@@ -435,6 +451,10 @@
     <div class="editField">
       <label for="spinSecondsInput">Spin length (seconds)</label>
       <input id="spinSecondsInput" type="number" min="2" max="30" step="0.5" inputmode="decimal">
+    </div>
+    <div class="editField check">
+      <input id="removeWinnerInput" type="checkbox">
+      <label for="removeWinnerInput">Remove picked entry from the wheel</label>
     </div>
     <div id="editError"></div>
     <div class="editActions">
@@ -506,6 +526,17 @@ applySpinSeconds(spinSeconds);
 function fullTurns() {
   return Math.max(3, Math.round(6 * spinSeconds / DEFAULT_SPIN_SECONDS));
 }
+
+/* ---------- remove picked entry (configurable via EDIT WHEEL) ----------
+   On for raffles where each person / item can only be picked once. */
+const REMOVE_STORAGE_KEY = 'converge-raffle-remove-winner';
+
+function loadRemoveWinner() {
+  try { return localStorage.getItem(REMOVE_STORAGE_KEY) === '1'; } catch (e) {}
+  return false;
+}
+
+let removeWinner = loadRemoveWinner();
 
 /* ---------- wheel drawing ---------- */
 const wheel = document.getElementById('wheel');
@@ -701,9 +732,36 @@ const overlay = document.getElementById('overlay');
 const prizeName = document.getElementById('prizeName');
 const pickAgainBtn = document.getElementById('pickAgainBtn');
 const closeBtn = document.getElementById('closeBtn');
+const removedNote = document.getElementById('removedNote');
 
 let currentRotation = 0;
 let spinning = false;
+let pendingRemoval = null;   // index of the winner to take off the wheel
+
+// Swap in a new entry list, persist it, and redraw from the start angle.
+function setEntries(entries) {
+  PRIZES = entries;
+  SEGMENTS = PRIZES.length;
+  SEG_ANGLE = 360 / SEGMENTS;
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(PRIZES)); } catch (e) {}
+  currentRotation = 0;
+  wheel.style.transition = 'none';
+  wheel.style.transform = 'rotate(0deg)';
+  drawWheel(0);
+}
+
+// Called as the winner popup closes — removes the winner if flagged.
+function applyPendingRemoval() {
+  if (pendingRemoval === null) return;
+  const i = pendingRemoval;
+  pendingRemoval = null;
+  setEntries(PRIZES.filter((_, j) => j !== i));
+}
+
+function closeWinner() {
+  overlay.classList.remove('show');
+  applyPendingRemoval();
+}
 
 function spin() {
   if (spinning || overlay.classList.contains('show') ||
@@ -740,6 +798,15 @@ function spin() {
     spinning = false;
     spinBtn.disabled = false;
     prizeName.textContent = PRIZES[winner];
+    if (removeWinner && SEGMENTS > 2) {
+      pendingRemoval = winner;
+      removedNote.textContent = 'This entry will be removed from the wheel.';
+    } else {
+      pendingRemoval = null;
+      removedNote.textContent = removeWinner
+        ? 'Not removed: the wheel needs at least 2 entries.'
+        : '';
+    }
     playWinChime();
     overlay.classList.add('show');
     pickAgainBtn.focus();
@@ -751,10 +818,10 @@ mascot.addEventListener('animationend', () => mascot.classList.remove('flying'))
 
 spinBtn.addEventListener('click', spin);
 pickAgainBtn.addEventListener('click', () => {
-  overlay.classList.remove('show');
+  closeWinner();
   setTimeout(spin, 420);
 });
-closeBtn.addEventListener('click', () => overlay.classList.remove('show'));
+closeBtn.addEventListener('click', closeWinner);
 
 /* ---------- edit wheel entries ---------- */
 const editBtn = document.getElementById('editBtn');
@@ -764,11 +831,13 @@ const editError = document.getElementById('editError');
 const saveEntriesBtn = document.getElementById('saveEntriesBtn');
 const cancelEditBtn = document.getElementById('cancelEditBtn');
 const spinSecondsInput = document.getElementById('spinSecondsInput');
+const removeWinnerInput = document.getElementById('removeWinnerInput');
 
 function openEditor() {
   if (spinning) return;
   entriesInput.value = PRIZES.join('\n');
   spinSecondsInput.value = spinSeconds;
+  removeWinnerInput.checked = removeWinner;
   editError.textContent = '';
   editOverlay.classList.add('show');
   entriesInput.focus();
@@ -795,16 +864,11 @@ function saveEntries() {
   applySpinSeconds(sec);
   try { localStorage.setItem(SPIN_STORAGE_KEY, String(sec)); } catch (e) {}
 
-  PRIZES = entries;
-  SEGMENTS = PRIZES.length;
-  SEG_ANGLE = 360 / SEGMENTS;
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(PRIZES)); } catch (e) {}
+  removeWinner = removeWinnerInput.checked;
+  try { localStorage.setItem(REMOVE_STORAGE_KEY, removeWinner ? '1' : '0'); } catch (e) {}
 
   // reset the wheel to its starting angle for the new slice layout
-  currentRotation = 0;
-  wheel.style.transition = 'none';
-  wheel.style.transform = 'rotate(0deg)';
-  drawWheel(0);
+  setEntries(entries);
   closeEditor();
 }
 
